@@ -6,22 +6,24 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory
 import face_recognition
 import numpy as np
+from criminal_db import criminal_profiles
 
 app = Flask(__name__)
 
 CRIMINALS_DIR = "criminals"
 CAPTURED_DIR = "captured"
+THRESHOLD = 0.45   # strict matching
 
 known_encodings = []
 known_names = []
 known_images = {}
-
 alerts = []
 
 os.makedirs(CAPTURED_DIR, exist_ok=True)
 
 print("[INFO] Loading criminal faces...")
 
+# Load criminal faces
 for name in os.listdir(CRIMINALS_DIR):
     person_dir = os.path.join(CRIMINALS_DIR, name)
     if not os.path.isdir(person_dir):
@@ -58,32 +60,47 @@ def recognition_loop():
         encodings = face_recognition.face_encodings(rgb, locations)
 
         for encoding in encodings:
-            matches = face_recognition.compare_faces(known_encodings, encoding)
             distances = face_recognition.face_distance(known_encodings, encoding)
 
-            if True in matches:
-                best_match = np.argmin(distances)
-                name = known_names[best_match]
+            if len(distances) == 0:
+                continue
 
-                # FIXED: Convert numpy float to normal float
-                confidence = float(round((1 - distances[best_match]) * 100, 2))
+            best_match = np.argmin(distances)
+            best_distance = distances[best_match]
 
-                time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{name}_{time_str}.jpg"
-                filepath = os.path.join(CAPTURED_DIR, filename)
+            # Only accept strong match
+            if best_distance >= THRESHOLD:
+                continue  # UNKNOWN -> no alert
 
-                cv2.imwrite(filepath, frame)
+            name = known_names[best_match]
+            confidence = float(round((1 - best_distance) * 100, 2))
 
-                alert = {
-                    "name": name,
-                    "time": time_str,
-                    "confidence": confidence,
-                    "captured_image": f"/captured_image/{filename}",
-                    "database_image": known_images.get(name, "")
-                }
+            profile = criminal_profiles.get(name, {
+                "age": "N/A",
+                "blood_group": "N/A",
+                "crime_history": [],
+                "level": "N/A"
+            })
 
-                alerts.append(alert)
-                print("[ALERT]", alert)
+            time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{name}_{time_str}.jpg"
+            filepath = os.path.join(CAPTURED_DIR, filename)
+            cv2.imwrite(filepath, frame)
+
+            alert = {
+                "name": name,
+                "time": time_str,
+                "confidence": str(confidence),
+                "age": str(profile.get("age", "N/A")),
+                "blood_group": profile.get("blood_group", "N/A"),
+                "crime_history": profile.get("crime_history", []),
+                "level": profile.get("level", "N/A"),
+                "captured_image": f"/captured_image/{filename}",
+                "database_image": known_images.get(name, "")
+            }
+
+            alerts.append(alert)
+            print("[ALERT]", alert)
 
         time.sleep(1)
 
