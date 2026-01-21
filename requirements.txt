@@ -1,5 +1,5 @@
 flask
-opencv-python
-face_recognition
+opencv-python-headless
+face-recognition
+dlib==19.24.2
 numpy
-requests
