@@ -1,5 +1,5 @@
 criminal_profiles = {
-    "Aryan": {
+    "Dimple": {
         "age": 23,
         "blood_group": "B+",
         "crime_history": [
